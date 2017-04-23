@@ -1,77 +1,60 @@
-/**
- * Copyright 2016 Google Inc. All Rights Reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 'use strict';
 
-// [START functionsimport]
 const functions = require('firebase-functions');
-// [END functionsimport]
-// [START additionalimports]
-// Moments library to format dates.
-const moment = require('moment');
-// CORS Express middleware to enable CORS Requests.
 const cors = require('cors')({origin: true});
-// [END additionalimports]
+const Vue = require('vue');
+const renderer = require('vue-server-renderer').createRenderer()
+const Chance = require('chance');
 
-// [START all]
-/**
- * Returns the server's date. You must provide a `format` URL query parameter or `format` vaue in
- * the request body with which we'll try to format the date.
- *
- * Format must follow the Node moment library. See: http://momentjs.com/
- *
- * Example format: "MMMM Do YYYY, h:mm:ss a".
- * Example request using URL query parameters:
- *   https://us-central1-<project-id>.cloudfunctions.net/date?format=MMMM%20Do%20YYYY%2C%20h%3Amm%3Ass%20a
- * Example request using request body with cURL:
- *   curl -H 'Content-Type: application/json' /
- *        -d '{"format": "MMMM Do YYYY, h:mm:ss a"}' /
- *        https://us-central1-<project-id>.cloudfunctions.net/date
- *
- * This endpoint supports CORS.
- */
-// [START trigger]
-exports.date = functions.https.onRequest((req, res) => {
-// [END trigger]
-  // [START sendError]
-  // Forbidding PUT requests.
+exports.genques = functions.https.onRequest((req, res) => {
   if (req.method === 'PUT') {
     res.status(403).send('Forbidden!');
   }
-  // [END sendError]
-
-  // [START usingMiddleware]
-  // Enable CORS using the `cors` express middleware.
   cors(req, res, () => {
-  // [END usingMiddleware]
-    // Reading date format from URL query parameter.
-    // [START readQueryParam]
-    let format = req.query.format;
-    // [END readQueryParam]
-    // Reading date format from request body query parameter
-    if (!format) {
-      // [START readBodyParam]
-      format = req.body.format;
-      // [END readBodyParam]
-    }
-    // [START sendResponse]
-    const formattedDate = moment().format(format);
-    console.log('Sending Formatted date:', formattedDate);
-    // res.status(200).send(formattedDate);
-    res.status(200).json({"curtime" : formattedDate});
-    // [END sendResponse]
+    const chance = new Chance();
+    const app = new Vue({
+      template: `<div id='app'>
+            <p>Q. {{ qtxt }}</p>
+          <p>Ans: {{ cans }}</p>
+                    </div>`,
+      computed: {
+        wordlen: function() {
+          return ((chance.natural({
+            min: 2,
+            max: 4
+          }) * 2) + 1)
+        },
+        baseword: function() {
+          return chance.word({length: this.wordlen})
+                                    .toUpperCase()
+        },
+        word1: function() {
+          return this.baseword
+            .split("")
+            .map((letter) => {
+              if (['a', 'e', 'i', 'o', 'u'].indexOf(letter.toLowerCase()) !== -1) {
+                return String.fromCharCode(letter.charCodeAt(0) + 1)
+              } else {
+                return String.fromCharCode(letter.charCodeAt(0) - 1)
+              }
+            })
+            .join("")
+            .toUpperCase()
+        },
+        qtxt: function() {
+          return `The letters in the word ${this.baseword} are changed in such a way, that the consonants are replaced by the previous letter in the English alphabet and the vowels are replaced by the next letter in the English alphabet. What is the third letter from the left end of the new set of letters?`
+        },
+        cans: function() {
+          return this.word1[2]
+        }
+      }
+    })
+    
+    renderer.renderToString(app, (error, html) => {
+        if (error) throw error;
+        console.log(html);
+        res.status(200).send(html);
+    });
   });
 });
 // [END all]
